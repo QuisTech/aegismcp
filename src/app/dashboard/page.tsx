@@ -93,25 +93,38 @@ export default function Dashboard() {
         setSplQuery("index=microservices status>=500 \n| stats count by pod_name, exception");
         setRcaExplanation("Identified database transaction thread leak inside src/db/pool.py:L42. Connections are staying open because the cursor loop fails to close under concurrent checkout spikes.");
         setRemediationScript(
-          "# Secure fix: database connection pool cursor release\n" +
-          "try:\n" +
-          "    cursor = conn.cursor()\n" +
-          "    cursor.execute(query)\n" +
-          "    result = cursor.fetchall()\n" +
-          "finally:\n" +
-          "    cursor.close()  # Prevents thread leakage\n" +
-          "    conn.close()"
+          "def execute_checkout(payload):\n" +
+          "    # AegisMCP Auto-Remediation Patch\n" +
+          "    # Safeguards against missing user_token within root request authorization dictionary\n" +
+          "    auth_payload = payload.get(\"auth\", {})\n" +
+          "    token = auth_payload.get(\"user_token\")\n" +
+          "    \n" +
+          "    if not token:\n" +
+          "        raise ValueError(\"User authorization token is required to execute a secure checkout process.\")\n" +
+          "        \n" +
+          "    # original code flows proceed below...\n" +
+          "    return process_cart_transaction(payload)"
         );
         setDryRunLogs([
-          "[Sandbox] Spinning up isolated python:3.11-slim container...",
-          "[Sandbox] Injecting pool.py with proposed remediation patch...",
-          "[Sandbox] Running concurrency regression test (500 virtual threads)...",
-          "[Sandbox] Result: 100% throughput, 0 leaks detected.",
-          "[Sandbox] Security Audit: Safe (No external network requests, zero CVE alerts)."
+          "[Sandbox] Initializing Python 3.10 sandbox test suite...",
+          "",
+          "[Sandbox] Compiling patch file ... OK.",
+          "",
+          "[Sandbox] Running tests in test_cart_exceptions.py ... 4/4 Tests Passed.",
+          "",
+          "[Sandbox] Checked for structural regressions: Syntax verified correctly."
         ]);
-        setSafetyRating("safe");
-        setTargetFilePath("src/db/pool.py");
+        setSafetyRating("needs-approval");
+        setTargetFilePath("src/services/cart/views.py");
         setRemediationApplied(false);
+
+        // Scroll to sandbox terminal so it's visible in the viewport
+        setTimeout(() => {
+          const el = document.querySelector('[data-scene="sandbox-dryrun"]');
+          if (el) {
+            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }
+        }, 300);
       } else if (sceneId === 'remediation-applied') {
         setIncidents((prev) =>
           prev.map((inc) =>
