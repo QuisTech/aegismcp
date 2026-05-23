@@ -2,6 +2,9 @@ import type { Metadata } from "next";
 import "./globals.css";
 import Link from "next/link";
 import { Shield, Radio, Layers, Activity } from "lucide-react";
+import SceneController from "@/components/SceneController";
+
+import PageTransitionProvider from "@/components/PageTransitionProvider";
 
 export const metadata: Metadata = {
   title: "AegisMCP - Autonomous Incident Resolution & Observability Copilot",
@@ -16,6 +19,7 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark">
       <body className="bg-bgPrimary text-gray-100 font-sans min-h-screen flex flex-col selection:bg-accentCyan selection:text-black">
+        <SceneController />
         {/* Global Glow Header Background */}
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-7xl h-64 bg-gradient-to-b from-accentCyan/10 via-transparent to-transparent blur-3xl -z-10 pointer-events-none" />
 
@@ -60,7 +64,9 @@ export default function RootLayout({
         </header>
 
         <main className="flex-grow flex flex-col">
-          {children}
+          <PageTransitionProvider>
+            {children}
+          </PageTransitionProvider>
         </main>
 
         <footer className="border-t border-borderMuted/80 bg-bgSecondary/40 py-8">

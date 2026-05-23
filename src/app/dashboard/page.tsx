@@ -32,6 +32,107 @@ export default function Dashboard() {
   const [targetFilePath, setTargetFilePath] = useState<string>("");
   const [remediationApplied, setRemediationApplied] = useState<boolean>(false);
 
+  React.useEffect(() => {
+    const handleSceneChange = (e: Event) => {
+      const sceneId = (e as CustomEvent).detail.id;
+      console.log(`🎬 [Dashboard] Reacting to scene: ${sceneId}`);
+
+      if (sceneId === 'dashboard-initial') {
+        setIncidents(MOCK_INCIDENTS);
+        setSelectedIncident(MOCK_INCIDENTS[0]);
+        setCurrentStep("idle");
+        setPipelineLogs([]);
+        setSplQuery("");
+        setRcaExplanation("");
+        setRemediationScript("");
+        setDryRunLogs([]);
+        setRemediationApplied(false);
+      } else if (sceneId === 'incident-select') {
+        setSelectedIncident(MOCK_INCIDENTS[0]);
+        setCurrentStep("idle");
+        setPipelineLogs([]);
+        setSplQuery("");
+        setRcaExplanation("");
+        setRemediationScript("");
+        setDryRunLogs([]);
+        setRemediationApplied(false);
+      } else if (sceneId === 'incident-analysis') {
+        setCurrentStep("querying");
+        setPipelineLogs([
+          "[QueryStrategist] Connected to Splunk MCP Server index metadata...",
+          "[QueryStrategist] Analyzing index 'microservices' schema fields...",
+          "[QueryStrategist] Synthesizing optimized SPL query limiting thread lockups..."
+        ]);
+        setSplQuery("");
+        setRcaExplanation("");
+        setRemediationScript("");
+        setDryRunLogs([]);
+        setRemediationApplied(false);
+        
+        const t1 = setTimeout(() => {
+          setCurrentStep("analyzing");
+          setPipelineLogs(prev => [
+            ...prev,
+            "[QueryStrategist] Splunk SPL executed successfully in 120ms.",
+            "[RootCauseAnalyst] Mapping downstream service traces from index...",
+            "[RootCauseAnalyst] Constructed 2D APM Topology map highlighting 'cart-service' in critical status.",
+            "[RootCauseAnalyst] Located anomalous database unclosed cursor loop inside pool.py."
+          ]);
+          setSplQuery("index=microservices status>=500 \n| stats count by pod_name, exception");
+          setRcaExplanation("Identified database transaction thread leak inside src/db/pool.py:L42. Connections are staying open because the cursor loop fails to close under concurrent checkout spikes.");
+        }, 5000);
+
+        return () => clearTimeout(t1);
+      } else if (sceneId === 'sandbox-dryrun') {
+        setCurrentStep("remediating");
+        setPipelineLogs(prev => [
+          ...prev,
+          "[MitigationEngineer] Compiling python connection pool patch script...",
+          "[MitigationEngineer] Instantiating isolated Kubernetes Docker sandbox container..."
+        ]);
+        setSplQuery("index=microservices status>=500 \n| stats count by pod_name, exception");
+        setRcaExplanation("Identified database transaction thread leak inside src/db/pool.py:L42. Connections are staying open because the cursor loop fails to close under concurrent checkout spikes.");
+        setRemediationScript(
+          "# Secure fix: database connection pool cursor release\n" +
+          "try:\n" +
+          "    cursor = conn.cursor()\n" +
+          "    cursor.execute(query)\n" +
+          "    result = cursor.fetchall()\n" +
+          "finally:\n" +
+          "    cursor.close()  # Prevents thread leakage\n" +
+          "    conn.close()"
+        );
+        setDryRunLogs([
+          "[Sandbox] Spinning up isolated python:3.11-slim container...",
+          "[Sandbox] Injecting pool.py with proposed remediation patch...",
+          "[Sandbox] Running concurrency regression test (500 virtual threads)...",
+          "[Sandbox] Result: 100% throughput, 0 leaks detected.",
+          "[Sandbox] Security Audit: Safe (No external network requests, zero CVE alerts)."
+        ]);
+        setSafetyRating("safe");
+        setTargetFilePath("src/db/pool.py");
+        setRemediationApplied(false);
+      } else if (sceneId === 'remediation-applied') {
+        setIncidents((prev) =>
+          prev.map((inc) =>
+            inc.id === MOCK_INCIDENTS[0].id ? { ...inc, severity: "RESOLVED" } : inc
+          )
+        );
+        setRemediationApplied(true);
+        setCurrentStep("completed");
+        setPipelineLogs(prev => [
+          ...prev,
+          "[MitigationEngineer] SRE approval received. Triggering rolling rollout cluster update...",
+          "[MitigationEngineer] Deployment rollout completed successfully.",
+          "[MitigationEngineer] Active incidents resolved. Restored system operational posture."
+        ]);
+      }
+    };
+
+    window.addEventListener('aegis-scene-change', handleSceneChange);
+    return () => window.removeEventListener('aegis-scene-change', handleSceneChange);
+  }, [incidents, selectedIncident]);
+
   const triggerAgentPipeline = async (incident: IncidentModel) => {
     setCurrentStep("querying");
     setPipelineLogs([]);
@@ -112,7 +213,7 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
         {/* Sidebar: Incident Select Queue */}
         <div className="xl:col-span-4 flex flex-col gap-4">
-          <div className="bg-bgSecondary/80 border border-borderMuted/80 rounded-xl p-5">
+          <div data-scene="dashboard-initial" className="bg-bgSecondary/80 border border-borderMuted/80 rounded-xl p-5">
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-bold text-gray-200 text-sm">Detected Alerts</h3>
               <button className="text-xs text-accentCyan hover:underline flex items-center gap-1">
@@ -133,6 +234,7 @@ export default function Dashboard() {
                 return (
                   <div
                     key={inc.id}
+                    data-scene={isSelected ? "incident-select" : undefined}
                     onClick={() => {
                       setSelectedIncident(inc);
                       setCurrentStep("idle");
@@ -197,7 +299,7 @@ export default function Dashboard() {
         </div>
 
         {/* Main Workspace Workspace Dashboard: Dynamic SRE Hub */}
-        <div className="xl:col-span-8 flex flex-col gap-6">
+        <div data-scene="incident-analysis" className="xl:col-span-8 flex flex-col gap-6">
           {/* Agent Status HUD */}
           <AgentStatusHUD currentStep={currentStep} />
 
@@ -216,15 +318,17 @@ export default function Dashboard() {
           </div>
 
           {/* Mitigation Code Patch Panel */}
-          <MitigationSandboxTerminal 
-            remediationScript={remediationScript}
-            scriptLanguage={selectedIncident.service === "cart-service" ? "python" : "yaml"}
-            dryRunLogs={dryRunLogs}
-            safetyRating={safetyRating}
-            targetFilePath={targetFilePath}
-            onApplyRemediation={handleApplyRemediation}
-            isApplied={remediationApplied}
-          />
+          <div data-scene="sandbox-dryrun" className="w-full">
+            <MitigationSandboxTerminal 
+              remediationScript={remediationScript}
+              scriptLanguage={selectedIncident.service === "cart-service" ? "python" : "yaml"}
+              dryRunLogs={dryRunLogs}
+              safetyRating={safetyRating}
+              targetFilePath={targetFilePath}
+              onApplyRemediation={handleApplyRemediation}
+              isApplied={remediationApplied}
+            />
+          </div>
         </div>
       </div>
     </div>

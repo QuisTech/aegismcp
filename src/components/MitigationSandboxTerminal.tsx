@@ -86,6 +86,7 @@ export default function MitigationSandboxTerminal({
               </div>
               
               <button
+                id="apply-patch-btn"
                 disabled={isApplied}
                 onClick={onApplyRemediation}
                 className={`w-full sm:w-auto px-4 py-2 rounded-md font-semibold text-xs transition-all flex items-center justify-center gap-1.5 ${

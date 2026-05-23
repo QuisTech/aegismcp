@@ -19,10 +19,37 @@ import { motion } from "framer-motion";
 export default function LandingPage() {
   const [activeTab, setActiveTab] = useState<"query" | "rca" | "mitigate">("query");
 
+  React.useEffect(() => {
+    const handleSceneChange = (e: Event) => {
+      const sceneId = (e as CustomEvent).detail.id;
+      console.log(`🎬 [LandingPage] Reacting to scene: ${sceneId}`);
+      if (sceneId === 'hero') {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      } else if (sceneId === 'agent-query-strategist') {
+        const el = document.getElementById('how-it-works');
+        if (el) el.scrollIntoView({ behavior: 'smooth' });
+        setActiveTab('query');
+      } else if (sceneId === 'agent-root-cause-analyst') {
+        const el = document.getElementById('how-it-works');
+        if (el) el.scrollIntoView({ behavior: 'smooth' });
+        setActiveTab('rca');
+      } else if (sceneId === 'agent-mitigation-engineer') {
+        const el = document.getElementById('how-it-works');
+        if (el) el.scrollIntoView({ behavior: 'smooth' });
+        setActiveTab('mitigate');
+      }
+    };
+
+    window.addEventListener('aegis-scene-change', handleSceneChange);
+    return () => {
+      window.removeEventListener('aegis-scene-change', handleSceneChange);
+    };
+  }, []);
+
   return (
     <div className="flex flex-col min-h-screen">
       {/* Hero Section */}
-      <section className="relative max-w-7xl mx-auto px-6 pt-20 pb-16 text-center lg:text-left flex flex-col lg:flex-row items-center gap-12 w-full">
+      <section data-scene="hero" className="relative max-w-7xl mx-auto px-6 pt-20 pb-16 text-center lg:text-left flex flex-col lg:flex-row items-center gap-12 w-full">
         <div className="flex-1 space-y-6 max-w-2xl">
           <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-cyan-950/60 border border-accentCyan/30 text-accentCyan text-xs font-semibold tracking-wide">
             <Radio className="w-3.5 h-3.5 animate-pulse" /> Autonomous SRE Remediation & Observability
@@ -143,7 +170,7 @@ export default function LandingPage() {
       </section>
 
       {/* Agent Technical Spec Tab Explainer */}
-      <section id="how-it-works" className="max-w-7xl mx-auto px-6 py-20 w-full">
+      <section id="how-it-works" data-scene="under-the-hood" className="max-w-7xl mx-auto px-6 py-20 w-full">
         <div className="text-center max-w-xl mx-auto mb-10">
           <h2 className="text-3xl font-extrabold text-white">Under the Hood</h2>
           <p className="text-sm text-zinc-400 mt-2">
@@ -154,6 +181,7 @@ export default function LandingPage() {
         {/* Tab triggers */}
         <div className="flex justify-center border-b border-zinc-800 mb-8 max-w-md mx-auto">
           <button
+            id="tab-query"
             onClick={() => setActiveTab("query")}
             className={`flex-1 py-3 text-sm font-semibold border-b-2 transition-colors ${ 
               activeTab === "query" ? "border-accentCyan text-white" : "border-transparent text-zinc-500 hover:text-zinc-300"
@@ -162,6 +190,7 @@ export default function LandingPage() {
             QueryStrategist
           </button>
           <button
+            id="tab-rca"
             onClick={() => setActiveTab("rca")}
             className={`flex-1 py-3 text-sm font-semibold border-b-2 transition-colors ${ 
               activeTab === "rca" ? "border-accentCyan text-white" : "border-transparent text-zinc-500 hover:text-zinc-300"
@@ -170,6 +199,7 @@ export default function LandingPage() {
             RootCauseAnalyst
           </button>
           <button
+            id="tab-mitigate"
             onClick={() => setActiveTab("mitigate")}
             className={`flex-1 py-3 text-sm font-semibold border-b-2 transition-colors ${ 
               activeTab === "mitigate" ? "border-accentCyan text-white" : "border-transparent text-zinc-500 hover:text-zinc-300"

@@ -1,0 +1,115 @@
+[
+  {
+    "elapsedMs": 1,
+    "action": "goto",
+    "value": "https://aegismcp.vercel.app/"
+  },
+  {
+    "elapsedMs": 1194,
+    "action": "narrate"
+  },
+  {
+    "elapsedMs": 35047,
+    "action": "wait"
+  },
+  {
+    "elapsedMs": 39050,
+    "action": "scroll",
+    "value": "400"
+  },
+  {
+    "elapsedMs": 40062,
+    "action": "wait"
+  },
+  {
+    "elapsedMs": 44066,
+    "action": "scroll",
+    "value": "-400"
+  },
+  {
+    "elapsedMs": 45073,
+    "action": "wait"
+  },
+  {
+    "elapsedMs": 47084,
+    "action": "click",
+    "selector": "a:has-text(\"Enter Incident War Room\")"
+  },
+  {
+    "elapsedMs": 50283,
+    "action": "narrate"
+  },
+  {
+    "elapsedMs": 85975,
+    "action": "wait"
+  },
+  {
+    "elapsedMs": 91979,
+    "action": "hover",
+    "selector": "h4:has-text(\"Checkout Service 500 Spike\")"
+  },
+  {
+    "elapsedMs": 93840,
+    "action": "wait"
+  },
+  {
+    "elapsedMs": 98846,
+    "action": "narrate"
+  },
+  {
+    "elapsedMs": 128239,
+    "action": "click",
+    "selector": "button:has-text(\"Initiate Autonomous War-Room\")"
+  },
+  {
+    "elapsedMs": 131348,
+    "action": "wait"
+  },
+  {
+    "elapsedMs": 143351,
+    "action": "narrate"
+  },
+  {
+    "elapsedMs": 176985,
+    "action": "wait"
+  },
+  {
+    "elapsedMs": 191990,
+    "action": "narrate"
+  },
+  {
+    "elapsedMs": 221806,
+    "action": "wait"
+  },
+  {
+    "elapsedMs": 236817,
+    "action": "scroll",
+    "value": "800"
+  },
+  {
+    "elapsedMs": 237961,
+    "action": "wait"
+  },
+  {
+    "elapsedMs": 242974,
+    "action": "narrate"
+  },
+  {
+    "elapsedMs": 274974,
+    "action": "click",
+    "selector": "button:has-text(\"Click to Apply and Rollout\")"
+  },
+  {
+    "elapsedMs": 277677,
+    "action": "wait"
+  },
+  {
+    "elapsedMs": 287682,
+    "action": "scroll",
+    "value": "-800"
+  },
+  {
+    "elapsedMs": 288702,
+    "action": "wait"
+  }
+]
