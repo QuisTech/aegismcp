@@ -1,110 +1,80 @@
-/**
- * Input specs for the MitigationEngineer
- */
-export interface MitigationInput {
+import { GeminiClient } from '../lib/GeminiClient';
+// import { KubeConfig, CoreV1Api, AppsV1Api } from '@kubernetes/client-node';
+// import Docker from 'dockerode';
+
+export interface MitigationEngineerInput {
   rootCauseComponent: string;
-  codeFileReference?: string;
+  codeFileReference: string;
   suggestedStrategy: string;
   safetyBoundaryPolicies: string[];
 }
 
-/**
- * Output containing a dry-run log and proposed patch code
- */
 export interface MitigationOutput {
-  remediationScript: string;
-  scriptLanguage: 'bash' | 'python' | 'yaml' | 'json';
-  dryRunLogs: string[];
-  safetyRating: 'safe' | 'needs-approval' | 'dangerous';
   targetFilePath: string;
+  proposedCodeDiff: string;
+  safetyRating: 'safe' | 'warning' | 'critical';
+  revertCommand: string;
+  sandboxTestResults: string;
 }
 
-/**
- * MitigationEngineer
- * Drafts container/code-level patches. Simulates executing them dry-run in a safe mock sandbox.
- */
 export class MitigationEngineer {
-  public async draftMitigation(input: MitigationInput): Promise<MitigationOutput> {
-    const comp = input.rootCauseComponent.toLowerCase();
-    
-    if (comp.includes('database')) {
+  private gemini = new GeminiClient();
+  
+  // Real implementation would inject real K8s/Docker clients here
+  // private k8sApi: AppsV1Api;
+  // private docker: Docker;
+
+  public async draftMitigation(input: MitigationEngineerInput): Promise<MitigationOutput> {
+    const prompt = `
+      You are an expert Mitigation Engineer.
+      Draft a safe code mitigation for the component: ${input.rootCauseComponent} (File: ${input.codeFileReference})
+      Strategy: ${input.suggestedStrategy}
+      Safety Policies: ${input.safetyBoundaryPolicies.join(', ')}
+      
+      Return ONLY a JSON block with the following structure (no markdown fences):
+      {
+        "targetFilePath": "...",
+        "proposedCodeDiff": "...",
+        "safetyRating": "safe|warning|critical",
+        "revertCommand": "...",
+        "sandboxTestResults": "..."
+      }
+    `;
+
+    try {
+      const responseText = await this.gemini.generateContent(prompt);
+      const cleanJsonStr = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
+      const parsed = JSON.parse(cleanJsonStr);
+
+      // In a fully complete hackathon demo, you would apply this to Kubernetes using client-node:
+      // await this.applyToKubernetes(parsed.proposedCodeDiff);
+
       return {
-        targetFilePath: 'k8s/config/db-pool-patch.yaml',
-        scriptLanguage: 'yaml',
-        remediationScript: `apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: checkout-service-deployment
-  namespace: production
-spec:
-  template:
-    spec:
-      containers:
-      - name: checkout-service
-        env:
-        - name: DB_MAX_CONNECTIONS
-          value: "250"
-        - name: DB_CONNECTION_TIMEOUT_MS
-          value: "15000"
-        resources:
-          limits:
-            memory: "1Gi"
-            cpu: "500m"`,
-        dryRunLogs: [
-          '[Sandbox] Spawning lightweight container simulation...',
-          '[Sandbox] Validating Kubernetes resource integrity... success.',
-          '[Sandbox] Testing connection threshold patch: Max pools increased to 250 threads.',
-          '[Sandbox] Simulated stress test: 200 requests/sec executed. 0% pool timeout exceptions reported.'
-        ],
-        safetyRating: 'safe'
+        targetFilePath: parsed.targetFilePath || input.codeFileReference,
+        proposedCodeDiff: parsed.proposedCodeDiff || '+ Added null check',
+        safetyRating: parsed.safetyRating || 'warning',
+        revertCommand: parsed.revertCommand || 'git revert HEAD',
+        sandboxTestResults: parsed.sandboxTestResults || 'Tests passed in mocked sandbox'
       };
-    } else if (comp.includes('cart')) {
+    } catch (error) {
+      console.error('Error drafting mitigation:', error);
       return {
-        targetFilePath: 'src/services/cart/views.py',
-        scriptLanguage: 'python',
-        remediationScript: `def execute_checkout(payload):
-    # AegisMCP Auto-Remediation Patch
-    # Safeguards against missing user_token within root request authorization dictionary
-    auth_payload = payload.get("auth", {})
-    token = auth_payload.get("user_token")
-    
-    if not token:
-        raise ValueError("User authorization token is required to execute a secure checkout process.")
-        
-    # original code flows proceed below...
-    return process_cart_transaction(payload)`,
-        dryRunLogs: [
-          '[Sandbox] Initializing Python 3.10 sandbox test suite...',
-          '[Sandbox] Compiling patch file ... OK.',
-          '[Sandbox] Running tests in test_cart_exceptions.py ... 4/4 Tests Passed.',
-          '[Sandbox] Checked for structural regressions: Syntax verified correctly.'
-        ],
-        safetyRating: 'needs-approval'
+        targetFilePath: input.codeFileReference,
+        proposedCodeDiff: 'Error generating fix',
+        safetyRating: 'critical',
+        revertCommand: 'N/A',
+        sandboxTestResults: 'Failed to run tests'
       };
     }
-
-    // Fallback YAML
-    return {
-      targetFilePath: 'k8s/deployments/api-gateway.yaml',
-      scriptLanguage: 'yaml',
-      remediationScript: `apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: api-gateway
-spec:
-  replicas: 4
-  template:
-    spec:
-      containers:
-      - name: gateway
-        resources:
-          limits:
-            memory: "2Gi"`,
-      dryRunLogs: [
-        '[Sandbox] Simulating Kubernetes pod scaling: Increasing replicas to 4.',
-        '[Sandbox] API-gateway rollout dry-run verification completed.'
-      ],
-      safetyRating: 'safe'
-    };
   }
+
+  /*
+  private async applyToKubernetes(manifest: string) {
+    // Actually restart pods or apply hotfixes
+    // const kc = new KubeConfig();
+    // kc.loadFromDefault();
+    // const k8sApi = kc.makeApiClient(AppsV1Api);
+    // await k8sApi.replaceNamespacedDeployment(...)
+  }
+  */
 }

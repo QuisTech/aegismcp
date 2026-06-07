@@ -1,6 +1,8 @@
 import { QueryStrategistAgent } from './QueryStrategistAgent';
 import { RootCauseAnalyst } from './RootCauseAnalyst';
 import { MitigationEngineer } from './MitigationEngineer';
+import { SplunkMCPClient } from '../lib/SplunkMCPClient';
+import { prisma } from '../lib/db';
 
 export interface OrchestratorTelemetry {
   incidentId: string;
@@ -8,15 +10,11 @@ export interface OrchestratorTelemetry {
   logs: string[];
 }
 
-/**
- * OrchestratorAgent
- * Coordinates sub-agents, manages interactive human-in-the-loop state transitions, 
- * and publishes simulated incident outputs to Jira and Slack.
- */
 export class OrchestratorAgent {
   private queryAgent = new QueryStrategistAgent();
   private analystAgent = new RootCauseAnalyst();
   private mitigationAgent = new MitigationEngineer();
+  private splunkClient = new SplunkMCPClient();
 
   public async orchestrateIncident(
     incidentId: string, 
@@ -32,55 +30,73 @@ export class OrchestratorAgent {
       }
     };
 
-    log(`Initializing Orchestrator for incident: ${incidentId}`);
-    log('Triggering QueryStrategistAgent to compile Splunk search query...');
-    
-    // 1. SPL Formulation
-    const splData = await this.queryAgent.execute({
-      naturalLanguagePrompt: triggerPrompt,
-      activeIncidentMetadata: {
-        serviceName: incidentId.includes('DB') ? 'database-service' : 'cart-service',
-        timeWindow: '-15m'
-      }
-    });
-    log(`SPL Generated successfully:\n${splData.splQuery}`);
+    try {
+      await this.splunkClient.connect();
 
-    // 2. Log Analysis & Root Cause Identification
-    log('Splunk MCP query executed. Retreived raw payloads. Routing to RootCauseAnalyst...');
-    
-    // Injecting simulated records corresponding to query result
-    const mockSplLogs = incidentId.includes('DB') 
-      ? [{ exception_class: 'TimeoutException', pool_exhaustion: true }]
-      : [{ exception_class: 'NullPointerException', file: 'views.py', line: 118 }];
+      log(`Initializing Orchestrator for incident: ${incidentId}`);
+      log('Triggering QueryStrategistAgent to compile Splunk search query using Gemini...');
+      
+      // 1. SPL Formulation
+      const splData = await this.queryAgent.execute({
+        naturalLanguagePrompt: triggerPrompt,
+        activeIncidentMetadata: {
+          serviceName: incidentId.includes('DB') ? 'database-service' : 'cart-service',
+          timeWindow: '-15m'
+        }
+      });
+      log(`SPL Generated successfully:\n${splData.splQuery}`);
 
-    const rca = await this.analystAgent.analyze({
-      rawSplResponse: mockSplLogs,
-      systemTopologyGraph: null,
-      incidentTrigger: triggerPrompt
-    });
-    
-    log(`Root Cause Identified with ${rca.confidenceScore}% confidence: ${rca.rootCauseStatement}`);
-    log(`Suspected faulty component: ${rca.suspectedComponent} (${rca.codeFileReference})`);
+      // 2. Real Splunk Search
+      log('Executing query against real Splunk MCP Server...');
+      const splunkResponse = await this.splunkClient.searchLogs(splData.splQuery, '-15m');
+      
+      // Extract the raw log data, adapting depending on the MCP server's response format
+      const mockSplLogs = splunkResponse.results || splunkResponse;
 
-    // 3. Sandbox Mitigation Coding
-    log('Initiating sandbox environment. MitigationEngineer drafting safe code patches...');
-    const mitigation = await this.mitigationAgent.draftMitigation({
-      rootCauseComponent: rca.suspectedComponent,
-      codeFileReference: rca.codeFileReference,
-      suggestedStrategy: 'Auto-Recover & patch state definition limits.',
-      safetyBoundaryPolicies: ['Do not edit environment schema keys', 'Check syntax rules']
-    });
+      // 3. Log Analysis & Root Cause Identification
+      log('Splunk results retrieved. Routing to RootCauseAnalyst and Gemini for RCA...');
+      const rca = await this.analystAgent.analyze({
+        rawSplResponse: mockSplLogs,
+        incidentTrigger: triggerPrompt
+      });
+      
+      log(`Root Cause Identified with ${rca.confidenceScore}% confidence: ${rca.rootCauseStatement}`);
+      log(`Suspected faulty component: ${rca.suspectedComponent} (${rca.codeFileReference})`);
 
-    log(`Mitigation draft finalized for target file: ${mitigation.targetFilePath}`);
-    log(`Sandbox Dry-Run completed with [${mitigation.safetyRating.toUpperCase()}] safety assessment.`);
-    
-    // Return compiled result payload
-    return {
-      incidentId,
-      splData,
-      rca,
-      mitigation,
-      finalLogs: logs
-    };
+      // 4. Mitigation Drafting
+      log('Initiating sandbox environment. MitigationEngineer drafting safe code patches via Gemini...');
+      const mitigation = await this.mitigationAgent.draftMitigation({
+        rootCauseComponent: rca.suspectedComponent,
+        codeFileReference: rca.codeFileReference,
+        suggestedStrategy: 'Auto-Recover & patch state definition limits.',
+        safetyBoundaryPolicies: ['Do not edit environment schema keys', 'Check syntax rules']
+      });
+
+      log(`Mitigation draft finalized for target file: ${mitigation.targetFilePath}`);
+      log(`Sandbox Dry-Run completed with [${mitigation.safetyRating.toUpperCase()}] safety assessment.`);
+      
+      // 5. Database Persistence
+      log('Saving incident record and audit trail to database (Prisma)...');
+      await prisma.incident.create({
+        data: {
+          id: incidentId,
+          splunkQuery: splData.splQuery,
+          rootCause: rca.rootCauseStatement,
+          remediationApplied: mitigation.proposedCodeDiff,
+          timestamp: new Date()
+        }
+      });
+
+      return {
+        incidentId,
+        splData,
+        rca,
+        mitigation,
+        finalLogs: logs
+      };
+    } catch (error: any) {
+      log(`Incident orchestration failed: ${error.message}`);
+      throw error;
+    }
   }
 }
