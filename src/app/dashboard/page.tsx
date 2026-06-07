@@ -10,7 +10,6 @@ import {
   BookOpen,
   ExternalLink
 } from "lucide-react";
-import { OrchestratorAgent } from "@/agents/OrchestratorAgent";
 import { MOCK_INCIDENTS, IncidentModel } from "@/lib/mcp";
 import AgentStatusHUD from "@/components/AgentStatusHUD";
 import TopologyMap from "@/components/TopologyMap";
@@ -148,37 +147,38 @@ export default function Dashboard() {
 
   const triggerAgentPipeline = async (incident: IncidentModel) => {
     setCurrentStep("querying");
-    setPipelineLogs([]);
+    setPipelineLogs(["[System] Sending request to real backend..."]);
     setSplQuery("");
     setRemediationScript("");
     setRemediationApplied(false);
 
-    const orchestrator = new OrchestratorAgent();
     try {
-      const result = await orchestrator.orchestrateIncident(
-        incident.id,
-        incident.triggerPrompt,
-        (currentLogLine, stateMeta) => {
-          setPipelineLogs(stateMeta.logs);
-          // Progress step state simulation dynamically
-          if (currentLogLine.includes("Executing")) {
-            setCurrentStep("analyzing");
-          } else if (currentLogLine.includes("Initiating sandbox")) {
-            setCurrentStep("remediating");
-          }
-        }
-      );
+      const response = await fetch('/api/orchestrate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          incidentId: incident.id,
+          triggerPrompt: incident.triggerPrompt
+        })
+      });
 
-      // Capture compiled outputs from model agent state definitions
+      if (!response.ok) {
+        throw new Error('Backend failed to process the request');
+      }
+
+      const result = await response.json();
+
+      setPipelineLogs(result.finalLogs || ["[System] Execution completed."]);
       setSplQuery(result.splData.splQuery);
-      setRcaExplanation(result.splData.explanation);
-      setRemediationScript(result.mitigation.remediationScript);
-      setDryRunLogs(result.mitigation.dryRunLogs);
+      setRcaExplanation(result.rca.rootCauseStatement);
+      setRemediationScript(result.mitigation.proposedCodeDiff);
+      setDryRunLogs([result.mitigation.sandboxTestResults]);
       setSafetyRating(result.mitigation.safetyRating);
       setTargetFilePath(result.mitigation.targetFilePath);
       setCurrentStep("completed");
     } catch (error) {
       console.error(error);
+      setPipelineLogs(["[Error] Failed to communicate with backend."]);
       setCurrentStep("failed");
     }
   };
