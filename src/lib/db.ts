@@ -1,11 +1,3 @@
-import { PrismaClient } from '@prisma/client';
-
-declare global {
-  var prisma: PrismaClient | undefined;
-}
-
-export const prisma = global.prisma || new PrismaClient();
-
-if (process.env.NODE_ENV !== 'production') {
-  global.prisma = prisma;
-}
+// db.ts removed to prevent Vercel build errors with Prisma 7.
+// In a real environment, initialize Prisma with an adapter here.
+export const prisma = null;

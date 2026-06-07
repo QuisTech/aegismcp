@@ -2,7 +2,6 @@ import { QueryStrategistAgent } from './QueryStrategistAgent';
 import { RootCauseAnalyst } from './RootCauseAnalyst';
 import { MitigationEngineer } from './MitigationEngineer';
 import { SplunkMCPClient } from '../lib/SplunkMCPClient';
-import { prisma } from '../lib/db';
 
 export interface OrchestratorTelemetry {
   incidentId: string;
@@ -51,7 +50,11 @@ export class OrchestratorAgent {
       const splunkResponse = await this.splunkClient.searchLogs(splData.splQuery, '-15m');
       
       // Extract the raw log data, adapting depending on the MCP server's response format
-      const mockSplLogs = splunkResponse.results || splunkResponse;
+      const mockSplLogs: any[] = Array.isArray(splunkResponse.results) 
+        ? splunkResponse.results 
+        : Array.isArray(splunkResponse) 
+          ? splunkResponse 
+          : [splunkResponse];
 
       // 3. Log Analysis & Root Cause Identification
       log('Splunk results retrieved. Routing to RootCauseAnalyst and Gemini for RCA...');
@@ -76,16 +79,8 @@ export class OrchestratorAgent {
       log(`Sandbox Dry-Run completed with [${mitigation.safetyRating.toUpperCase()}] safety assessment.`);
       
       // 5. Database Persistence
-      log('Saving incident record and audit trail to database (Prisma)...');
-      await prisma.incident.create({
-        data: {
-          id: incidentId,
-          splunkQuery: splData.splQuery,
-          rootCause: rca.rootCauseStatement,
-          remediationApplied: mitigation.proposedCodeDiff,
-          timestamp: new Date()
-        }
-      });
+      log('Saving incident record and audit trail (Mocked for Vercel deployment)...');
+      // In a full production environment, we would save to Postgres here.
 
       return {
         incidentId,
