@@ -2,6 +2,7 @@ import { QueryStrategistAgent } from './QueryStrategistAgent';
 import { RootCauseAnalyst } from './RootCauseAnalyst';
 import { MitigationEngineer } from './MitigationEngineer';
 import { SplunkMCPClient } from '../lib/SplunkMCPClient';
+import { SplunkService } from '../lib/SplunkService';
 
 export interface OrchestratorTelemetry {
   incidentId: string;
@@ -13,7 +14,8 @@ export class OrchestratorAgent {
   private queryAgent = new QueryStrategistAgent();
   private analystAgent = new RootCauseAnalyst();
   private mitigationAgent = new MitigationEngineer();
-  private splunkClient = new SplunkMCPClient();
+  private splunkMCPClient = new SplunkMCPClient();
+  private splunkRESTService = new SplunkService();
 
   public async orchestrateIncident(
     incidentId: string, 
@@ -30,12 +32,9 @@ export class OrchestratorAgent {
     };
 
     try {
-      await this.splunkClient.connect();
-
+      // 1. SPL Formulation
       log(`Initializing Orchestrator for incident: ${incidentId}`);
       log('Triggering QueryStrategistAgent to compile Splunk search query using Gemini...');
-      
-      // 1. SPL Formulation
       const splData = await this.queryAgent.execute({
         naturalLanguagePrompt: triggerPrompt,
         activeIncidentMetadata: {
@@ -46,15 +45,25 @@ export class OrchestratorAgent {
       log(`SPL Generated successfully:\n${splData.splQuery}`);
 
       // 2. Real Splunk Search
-      log('Executing query against real Splunk MCP Server...');
-      const splunkResponse = await this.splunkClient.searchLogs(splData.splQuery, '-15m');
+      let mockSplLogs: any[] = [];
       
-      // Extract the raw log data, adapting depending on the MCP server's response format
-      const mockSplLogs: any[] = Array.isArray(splunkResponse.results) 
-        ? splunkResponse.results 
-        : Array.isArray(splunkResponse) 
-          ? splunkResponse 
-          : [splunkResponse];
+      // Try Cloud/REST API first if configured (required for Vercel)
+      if (process.env.SPLUNK_HOST && process.env.SPLUNK_USERNAME) {
+        log('Executing query against real Splunk Cloud via REST API...');
+        const restResults = await this.splunkRESTService.executeSearch(splData.splQuery);
+        mockSplLogs = restResults;
+      } else {
+        // Fallback to local MCP stdio server
+        log('Executing query against local Splunk MCP Server...');
+        await this.splunkMCPClient.connect();
+        const splunkResponse = await this.splunkMCPClient.searchLogs(splData.splQuery, '-15m');
+        
+        mockSplLogs = Array.isArray(splunkResponse.results) 
+          ? splunkResponse.results 
+          : Array.isArray(splunkResponse) 
+            ? splunkResponse 
+            : [splunkResponse];
+      }
 
       // 3. Log Analysis & Root Cause Identification
       log('Splunk results retrieved. Routing to RootCauseAnalyst and Gemini for RCA...');
