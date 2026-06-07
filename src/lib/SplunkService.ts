@@ -23,13 +23,10 @@ export class SplunkService {
 
   async executeSearch(searchQuery: string): Promise<any[]> {
     if (!this.isConfigured) {
-      return [
-        { _time: new Date().toISOString(), _raw: 'Mock log line 1' },
-        { _time: new Date().toISOString(), _raw: 'Mock log line 2' }
-      ];
+      return this.getMockData();
     }
 
-    return new Promise((resolve, reject) => {
+    const searchPromise = new Promise<any[]>((resolve, reject) => {
       this.service.search(searchQuery, { exec_mode: 'blocking' }, (err: any, job: any) => {
         if (err) {
           reject(err);
@@ -40,6 +37,11 @@ export class SplunkService {
           if (err) {
             reject(err);
             return;
+          }
+          
+          if (!results || !results.rows) {
+             resolve([]);
+             return;
           }
           
           const formattedResults = results.rows.map((row: any) => {
@@ -54,5 +56,23 @@ export class SplunkService {
         });
       });
     });
+
+    const timeoutPromise = new Promise<any[]>((_, reject) =>
+      setTimeout(() => reject(new Error("Splunk API Connection Timeout")), 5000)
+    );
+
+    try {
+      return await Promise.race([searchPromise, timeoutPromise]);
+    } catch (error) {
+      console.warn("Splunk API request failed or timed out. Falling back to mock data.", error);
+      return this.getMockData();
+    }
+  }
+
+  private getMockData(): any[] {
+    return [
+      { _time: new Date().toISOString(), _raw: 'Mock log line 1 - Database connection refused' },
+      { _time: new Date().toISOString(), _raw: 'Mock log line 2 - Connection Pool Exhausted' }
+    ];
   }
 }
