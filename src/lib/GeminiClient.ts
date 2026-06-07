@@ -28,8 +28,27 @@ export class GeminiClient {
 
   private mockGenerateContent(prompt: string): string {
     if (prompt.includes('SPL')) {
-      return `index=production_microservices status>=500 | stats count by endpoint`;
+      return JSON.stringify({
+        splQuery: 'index=production_microservices status>=500 | stats count by endpoint',
+        targetIndices: ['production_microservices'],
+        estimatedComplexity: 'low',
+        explanation: 'Mock generated SPL query due to missing Gemini API Key.'
+      });
     }
-    return `Analysis: The issue appears to be related to a database timeout. Recommended fix: increase connection pool size.`;
+    if (prompt.includes('Root Cause Analyst')) {
+      return JSON.stringify({
+        rootCauseStatement: 'Mock Analysis: The issue appears to be related to a database timeout.',
+        confidenceScore: 85,
+        suspectedComponent: 'checkout-service',
+        codeFileReference: 'src/db/pool.py'
+      });
+    }
+    return JSON.stringify({
+      targetFilePath: 'src/db/pool.py',
+      proposedCodeDiff: '+ # Mock fix applied',
+      safetyRating: 'safe',
+      revertCommand: 'git checkout -- src/db/pool.py',
+      sandboxTestResults: 'Mock tests passed.'
+    });
   }
 }
